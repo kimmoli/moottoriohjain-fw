@@ -76,7 +76,8 @@
 	PIO0_2	S1	Input
    * */
 
-int st = -1;
+int st1 = -1;
+int st2 = -1;
 
 void configurePins()
 {
@@ -95,6 +96,8 @@ void configurePins()
 
     /* CTIN_0 */
     LPC_SWM->PINASSIGN5 = 0x02ffffffUL;	// CTIN_0 -> PIO0_2
+    /* CTIN_1 */
+    LPC_SWM->PINASSIGN6 = 0xffffff03UL;	// CTIN_1 -> PIO0_3
     /* CTOUT_0 */
     // LPC_SWM->PINASSIGN6 = 0x06ffffffUL; // CTOUT_0 -> PIO0_6
     /* CTOUT_1 */
@@ -136,40 +139,78 @@ void SCT_IRQHandler (void)
 {
 	uint32_t status = LPC_SCT->EVFLAG;
 
-	if (status & (1u << SCT_IRQ_EVENT_width))
+	if (status & (1u << SCT_IRQ_EVENT_signal1_width))
 	{
 		/* New measurement result */
+		printf("M1 %d\r\n", SCT_CAPTURE_cap_signal1_width);
 
-		if (SCT_CAPTURE_cap_width > 1800)
+		if (SCT_CAPTURE_cap_signal1_width > 1800)
 		{
 			LPC_GPIO_PORT->CLR0 = 0x2 << 6;
 			LPC_GPIO_PORT->SET0 = 0x1 << 6;
-			if (st != CW) printf("M1 CW\r\n");
-			st = CW;
+			if (st1 != CW) printf("M1 CW\r\n");
+			st1 = CW;
 		}
-		else if (SCT_CAPTURE_cap_width < 1200)
+		else if (SCT_CAPTURE_cap_signal1_width < 1200)
 		{
 			LPC_GPIO_PORT->CLR0 = 0x1 << 6;
 			LPC_GPIO_PORT->SET0 = 0x2 << 6;
-			if (st != CCW) printf("M1 CCW\r\n");
-			st = CCW;
+			if (st1 != CCW) printf("M1 CCW\r\n");
+			st1 = CCW;
 		}
 		else
 		{
 			LPC_GPIO_PORT->CLR0 = 0x3 << 6; // clear all outputs
-			if (st != STOP) printf("M1 STOP\r\n");
-			st = STOP;
+			if (st1 != STOP) printf("M1 STOP\r\n");
+			st1 = STOP;
 		}
 	}
 
-	if (status & (1u << SCT_IRQ_EVENT_no_signal))
+	if (status & (1u << SCT_IRQ_EVENT_signal1_no_signal))
 	{
 		/* Time-out (no signal) */
 		  LPC_GPIO_PORT->CLR0 = 0x3 << 6; // clear all outputs
-		  if (st != NOSIG)
-			  printf("no signal\r\n");
-		  st = NOSIG;
+		  if (st1 != NOSIG)
+			  printf("M1 no signal\r\n");
+		  st1 = NOSIG;
 	}
+
+	if (status & (1u << SCT_IRQ_EVENT_signal2_width))
+	{
+		/* New measurement result */
+		printf("M2 %d\r\n", SCT_CAPTURE_cap_signal2_width);
+
+		if (SCT_CAPTURE_cap_signal2_width > 1800)
+		{
+			LPC_GPIO_PORT->CLR0 = 0x2 << 8;
+			LPC_GPIO_PORT->SET0 = 0x1 << 8;
+			if (st2 != CW) printf("M2 CW\r\n");
+			st2 = CW;
+		}
+		else if (SCT_CAPTURE_cap_signal2_width < 1200)
+		{
+			LPC_GPIO_PORT->CLR0 = 0x1 << 8;
+			LPC_GPIO_PORT->SET0 = 0x2 << 8;
+			if (st2 != CCW) printf("M2 CCW\r\n");
+			st2 = CCW;
+		}
+		else
+		{
+			LPC_GPIO_PORT->CLR0 = 0x3 << 8; // clear all outputs
+			if (st2 != STOP) printf("M2 STOP\r\n");
+			st2 = STOP;
+		}
+	}
+
+	if (status & (1u << SCT_IRQ_EVENT_signal2_no_signal))
+	{
+		/* Time-out (no signal) */
+		  LPC_GPIO_PORT->CLR0 = 0x3 << 8; // clear all outputs
+		  if (st2 != NOSIG)
+			  printf("M2 no signal\r\n");
+		  st2 = NOSIG;
+	}
+
 
 	/* Acknowledge interrupts */
 	LPC_SCT->EVFLAG = status;
@@ -212,15 +253,15 @@ int main(void)
 
   // Initialize it:
   sct_fsm_init();							/* Init code from RedState tool */
-  LPC_SCT->CTRL_U =						/* Set resolution (prescaler) of 32-bit counter */
-		(LPC_SCT->CTRL_U & ~SCT_CTRL_U_PRE_L_Msk) | ((SCT_PRESCALER << SCT_CTRL_U_PRE_L_Pos) & SCT_CTRL_U_PRE_L_Msk);
+  LPC_SCT->CTRL_U = (LPC_SCT->CTRL_U & ~SCT_CTRL_U_PRE_L_Msk) | ((SCT_PRESCALER << SCT_CTRL_U_PRE_L_Pos) & SCT_CTRL_U_PRE_L_Msk);
+  LPC_SCT->CTRL_U = (LPC_SCT->CTRL_U & ~SCT_CTRL_U_PRE_H_Msk) | ((SCT_PRESCALER << SCT_CTRL_U_PRE_H_Pos) & SCT_CTRL_U_PRE_H_Msk);
 
   // unhalt it: - clearing bit 2 of the CTRL register
   LPC_SCT->CTRL_U &= ~SCT_CTRL_U_HALT_L_Msk;
+  LPC_SCT->CTRL_U &= ~SCT_CTRL_U_HALT_H_Msk;
 
   // Enable SCT interrupt
   NVIC_EnableIRQ(SCT_IRQn);
-
 
   rxRead = 0;
 
@@ -236,14 +277,7 @@ int main(void)
 	  if (mrt_counter > (mrt_last + 50))
 	  {
 		  mrt_last = mrt_counter;
-		  if (st == NOSIG)
-		  {
-			  LPC_GPIO_PORT->CLR0 = 1 << 13; // lit led
-		  }
-		  else
-		  {
 			  LPC_GPIO_PORT->NOT0 = 1 << 13; // toggle led
-		  }
 	  }
   }
 }

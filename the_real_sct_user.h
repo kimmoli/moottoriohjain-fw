@@ -30,15 +30,12 @@ SCT_DefineRegBit(SCT_CTRL_U_PRE_H,					21, 8);
 /* Define expected signal characteristics */
 #define PWM_FREQUENCY			50		/* PWM frequency in Hz */
 #define PWM_RESOLUTION_NS		1000		/* Timer resolution in ns */
-#define PWM_MIN_DUTY_PERCENT	90			/* Minimum allowed duty cycle in % */
-#define PWM_MAX_DUTY_PERCENT	91			/* Maximum allowed duty cycle in % */
 
 
 /* Derived constants */
 #define SCT_PRESCALER			(((SystemCoreClock / 1000u) * (PWM_RESOLUTION_NS)) / 1000000u - 1u)
 
-#define min_pulse_width			((10000000u * PWM_MIN_DUTY_PERCENT) / (PWM_FREQUENCY * PWM_RESOLUTION_NS))
-#define max_pulse_width			((10000000u * PWM_MAX_DUTY_PERCENT) / (PWM_FREQUENCY * PWM_RESOLUTION_NS))
-#define timeout_value			((10000000u * 300                 ) / (PWM_FREQUENCY * PWM_RESOLUTION_NS))
+#define timeout_value			0xFFFE
+/* ((10000000u * 300) / (PWM_FREQUENCY * PWM_RESOLUTION_NS)) */
 
 #endif
